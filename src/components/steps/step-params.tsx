@@ -2,11 +2,11 @@
 
 import type { GenerateState } from "@/app/generate/page";
 import { STYLE_OPTIONS, WORD_COUNT_OPTIONS, LOOP_TIME_OPTIONS } from "@/lib/script-templates";
-import { ArrowLeft, ArrowRight, BookOpen, Heart, Zap } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, Heart, Zap, Award } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const styleIcons: Record<string, React.ElementType> = {
-  BookOpen, Heart, Zap,
+  BookOpen, Heart, Zap, Award,
 };
 
 type Props = {

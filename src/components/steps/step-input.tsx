@@ -5,7 +5,7 @@ import type { GenerateState } from "@/app/generate/page";
 import { CATEGORY_TEMPLATES } from "@/lib/script-templates";
 import {
   GraduationCap, Sparkles, UtensilsCrossed, Smartphone, Home, PenTool,
-  ArrowRight, MessageSquare, Upload, X, FileText, Image as ImageIcon,
+  ArrowRight, MessageSquare, Upload, X, FileText, Image as ImageIcon, Loader2, Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +18,8 @@ type UploadedFile = {
   type: string;
   content: string;
   preview?: string;
+  analyzing?: boolean;
+  analysisResult?: string;
 };
 
 type Props = {
@@ -57,6 +59,50 @@ export function StepInput({ state, updateState, onNext }: Props) {
 描述越详细，生成的话术越精准。你也可以直接用自然语言描述。`;
   })();
 
+  const analyzeImage = async (imageBase64: string, fileName: string, fileIdx: number) => {
+    setUploadedFiles((prev) =>
+      prev.map((f, i) => (i === fileIdx ? { ...f, analyzing: true } : f))
+    );
+
+    try {
+      const res = await fetch("/api/analyze-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageBase64, fileName }),
+      });
+      const data = await res.json();
+
+      if (data.analysis) {
+        setUploadedFiles((prev) =>
+          prev.map((f, i) =>
+            i === fileIdx ? { ...f, analyzing: false, analysisResult: data.analysis } : f
+          )
+        );
+        updateState({
+          productInfo:
+            state.productInfo +
+            `\n\n--- AI 从图片「${fileName}」识别到的信息 ---\n${data.analysis}`,
+        });
+      } else {
+        setUploadedFiles((prev) =>
+          prev.map((f, i) =>
+            i === fileIdx
+              ? { ...f, analyzing: false, analysisResult: "识别失败，请手动补充信息" }
+              : f
+          )
+        );
+      }
+    } catch {
+      setUploadedFiles((prev) =>
+        prev.map((f, i) =>
+          i === fileIdx
+            ? { ...f, analyzing: false, analysisResult: "识别失败，请手动补充信息" }
+            : f
+        )
+      );
+    }
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
@@ -65,14 +111,22 @@ export function StepInput({ state, updateState, onNext }: Props) {
       if (file.type.startsWith("image/")) {
         const reader = new FileReader();
         reader.onload = (ev) => {
-          const preview = ev.target?.result as string;
+          const dataUrl = ev.target?.result as string;
+          const base64 = dataUrl.split(",")[1];
+          const newIdx = uploadedFiles.length;
+
           setUploadedFiles((prev) => [
             ...prev,
-            { name: file.name, type: "image", content: `[已上传图片: ${file.name}]`, preview },
+            {
+              name: file.name,
+              type: "image",
+              content: `[已上传图片: ${file.name}]`,
+              preview: dataUrl,
+              analyzing: true,
+            },
           ]);
-          updateState({
-            productInfo: state.productInfo + `\n\n[参考图片: ${file.name}]`,
-          });
+
+          analyzeImage(base64, file.name, newIdx);
         };
         reader.readAsDataURL(file);
       } else {
@@ -83,7 +137,7 @@ export function StepInput({ state, updateState, onNext }: Props) {
           { name: file.name, type: "text", content: truncated },
         ]);
         updateState({
-          productInfo: state.productInfo + `\n\n--- 来自文件 ${file.name} ---\n${truncated}`,
+          productInfo: state.productInfo + `\n\n--- 来自文件「${file.name}」 ---\n${truncated}`,
         });
       }
     }
@@ -165,7 +219,7 @@ export function StepInput({ state, updateState, onNext }: Props) {
             点击上传产品图片、竞品截图、需求文档等
           </p>
           <p className="text-xs text-[var(--color-text-secondary)]/70">
-            支持 图片（JPG/PNG）、文本（TXT/MD）、文档（PDF）
+            支持图片（JPG/PNG）、文本（TXT/MD）| 图片会自动 AI 识别分析
           </p>
         </div>
         <input
@@ -179,35 +233,67 @@ export function StepInput({ state, updateState, onNext }: Props) {
 
         {/* Uploaded files list */}
         {uploadedFiles.length > 0 && (
-          <div className="mt-3 space-y-2">
+          <div className="mt-3 space-y-3">
             {uploadedFiles.map((file, idx) => (
               <div
                 key={idx}
-                className="flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2.5"
+                className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]"
               >
-                {file.preview ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={file.preview}
-                    alt={file.name}
-                    className="h-10 w-10 rounded object-cover"
-                  />
-                ) : (
-                  <div className="flex h-10 w-10 items-center justify-center rounded bg-gray-100">
-                    {file.type === "image" ? (
-                      <ImageIcon className="h-5 w-5 text-gray-400" />
-                    ) : (
-                      <FileText className="h-5 w-5 text-gray-400" />
+                <div className="flex items-center gap-3 p-3">
+                  {file.preview ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={file.preview}
+                      alt={file.name}
+                      className="h-12 w-12 rounded-lg object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gray-100">
+                      {file.type === "image" ? (
+                        <ImageIcon className="h-5 w-5 text-gray-400" />
+                      ) : (
+                        <FileText className="h-5 w-5 text-gray-400" />
+                      )}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="truncate text-sm font-medium">{file.name}</p>
+                    {file.analyzing && (
+                      <p className="flex items-center gap-1.5 text-xs text-[var(--color-primary)]">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        AI 正在识别图片内容...
+                      </p>
+                    )}
+                    {file.analysisResult && !file.analyzing && (
+                      <p className="flex items-center gap-1 text-xs text-green-600">
+                        <Eye className="h-3 w-3" />
+                        AI 识别完成，结果已填入上方输入框
+                      </p>
+                    )}
+                    {file.type === "text" && (
+                      <p className="text-xs text-[var(--color-text-secondary)]">
+                        文件内容已读取并填入上方输入框
+                      </p>
                     )}
                   </div>
+                  <button
+                    onClick={() => removeFile(idx)}
+                    className="shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                {/* AI analysis result preview */}
+                {file.analysisResult && !file.analyzing && (
+                  <div className="border-t border-[var(--color-border)] bg-green-50 px-3 py-2.5">
+                    <p className="mb-1 text-xs font-medium text-green-700">AI 识别结果：</p>
+                    <p className="whitespace-pre-wrap text-xs leading-relaxed text-green-800">
+                      {file.analysisResult.slice(0, 300)}
+                      {file.analysisResult.length > 300 && "..."}
+                    </p>
+                  </div>
                 )}
-                <span className="flex-1 truncate text-sm">{file.name}</span>
-                <button
-                  onClick={() => removeFile(idx)}
-                  className="shrink-0 rounded-lg p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
-                >
-                  <X className="h-4 w-4" />
-                </button>
               </div>
             ))}
           </div>

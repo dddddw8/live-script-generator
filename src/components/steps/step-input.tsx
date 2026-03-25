@@ -26,8 +26,8 @@ type UploadedFile = {
 
 type MissingField = {
   field: string;
-  reason: string;
-  suggestion: string;
+  question: string;
+  example: string;
 };
 
 type Props = {
@@ -43,6 +43,8 @@ export function StepInput({ state, updateState, onNext }: Props) {
   const [checking, setChecking] = useState(false);
   const [showCheckDialog, setShowCheckDialog] = useState(false);
   const [missingFields, setMissingFields] = useState<MissingField[]>([]);
+  const [answers, setAnswers] = useState<Record<number, string>>({});
+  const questionFileRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
   const handleCategorySelect = (catId: string) => {
     setSelectedCategory(catId);
@@ -93,12 +95,13 @@ ${fieldsList}
 规则：
 1. 如果某个字段完全没有提到，标记为缺失
 2. 如果某个字段提到了但太模糊（如只写了"好"而没有具体内容），也标记为需要补充
-3. 特别注意：售价/价格、促销策略/福利/赠品、直播间玩法 这三项对话术质量影响很大，如果缺失必须提醒
+3. 特别注意：售价/价格、促销策略/福利/赠品 这两项对话术质量影响极大，如果缺失必须提醒
 4. 如果所有关键信息都已提供且足够具体，返回空数组
+5. 对每个缺失字段，用口语化的方式向用户提问，像朋友聊天一样自然
 
 请直接返回JSON数组，不要输出思考过程，不要包含markdown代码块标记：
 [
-  {"field": "缺失字段名", "reason": "为什么需要这个信息", "suggestion": "建议用户怎么补充"}
+  {"field": "缺失字段名", "question": "用口语化的方式向用户提问（如：这款产品直播间卖多少钱呀？有没有什么优惠活动或赠品？）", "example": "给一个填写示例（如：299元、买一送一加赠收纳包）"}
 ]
 如果信息完整，返回：[]`,
         prompt: state.productInfo,
@@ -111,6 +114,7 @@ ${fieldsList}
         onNext();
       } else {
         setMissingFields(parsed);
+        setAnswers({});
         setShowCheckDialog(true);
       }
     } catch (err) {
@@ -354,48 +358,100 @@ ${fieldsList}
         )}
       </div>
 
-      {/* Info check dialog */}
+      {/* Info check dialog - interactive Q&A */}
       {showCheckDialog && missingFields.length > 0 && (
-        <div className="animate-fade-in rounded-2xl border-2 border-amber-300 bg-amber-50 p-5">
+        <div className="animate-fade-in rounded-2xl border-2 border-[var(--color-primary)]/30 bg-[var(--color-surface)] p-5 shadow-lg">
           <div className="mb-4 flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-amber-500" />
-            <h3 className="text-base font-semibold text-amber-800">
-              AI 检测到以下关键信息缺失
-            </h3>
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-primary)]/10">
+              <MessageSquare className="h-4 w-4 text-[var(--color-primary)]" />
+            </div>
+            <div>
+              <h3 className="text-base font-semibold">还需要补充一些信息</h3>
+              <p className="text-xs text-[var(--color-text-secondary)]">
+                补充后话术质量会更高，也可以跳过直接生成
+              </p>
+            </div>
           </div>
-          <p className="mb-4 text-sm text-amber-700">
-            补充这些信息可以显著提升话术质量，建议完善后再生成：
-          </p>
-          <div className="space-y-3">
+
+          <div className="space-y-4">
             {missingFields.map((item, idx) => (
-              <div key={idx} className="rounded-xl border border-amber-200 bg-white p-3">
-                <div className="flex items-start gap-2">
-                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs font-bold text-amber-600">
+              <div key={idx} className="rounded-xl border border-[var(--color-border)] bg-gray-50/50 p-4">
+                <div className="mb-2 flex items-start gap-2">
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)] text-xs font-bold text-white">
                     {idx + 1}
                   </span>
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-amber-800">{item.field}</p>
-                    <p className="mt-0.5 text-xs text-amber-600">{item.reason}</p>
-                    <p className="mt-1 text-xs text-[var(--color-primary)]">
-                      建议：{item.suggestion}
-                    </p>
-                  </div>
+                  <p className="text-sm font-medium">{item.question}</p>
+                </div>
+
+                {/* Answer input */}
+                <div className="ml-7">
+                  <textarea
+                    value={answers[idx] || ""}
+                    onChange={(e) => setAnswers((prev) => ({ ...prev, [idx]: e.target.value }))}
+                    placeholder={`例如：${item.example}`}
+                    rows={2}
+                    className="w-full rounded-lg border border-[var(--color-border)] bg-white p-3 text-sm leading-relaxed placeholder:text-[var(--color-text-secondary)]/50 focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20"
+                  />
+
+                  {/* Upload button for this question */}
+                  <button
+                    onClick={() => questionFileRefs.current[idx]?.click()}
+                    className="mt-1.5 inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs text-[var(--color-text-secondary)] transition-colors hover:bg-gray-100"
+                  >
+                    <Upload className="h-3 w-3" />
+                    上传图片/文件补充
+                  </button>
+                  <input
+                    ref={(el) => { questionFileRefs.current[idx] = el; }}
+                    type="file"
+                    accept="image/*,.txt,.md,.pdf"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (file.type.startsWith("image/")) {
+                        setAnswers((prev) => ({ ...prev, [idx]: (prev[idx] || "") + `\n[已上传图片: ${file.name}]` }));
+                      } else {
+                        const text = await file.text();
+                        setAnswers((prev) => ({ ...prev, [idx]: (prev[idx] || "") + "\n" + text.slice(0, 1000) }));
+                      }
+                      e.target.value = "";
+                    }}
+                  />
                 </div>
               </div>
             ))}
           </div>
-          <div className="mt-4 flex gap-3">
+
+          <div className="mt-5 flex gap-3">
             <button
-              onClick={() => setShowCheckDialog(false)}
-              className="flex-1 rounded-xl bg-[var(--color-primary)] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-primary-dark)]"
+              onClick={() => {
+                const supplementText = missingFields
+                  .map((item, idx) => {
+                    const answer = answers[idx]?.trim();
+                    return answer ? `${item.field}：${answer}` : null;
+                  })
+                  .filter(Boolean)
+                  .join("\n");
+
+                if (supplementText) {
+                  updateState({
+                    productInfo: state.productInfo + "\n\n" + supplementText,
+                  });
+                }
+                setShowCheckDialog(false);
+                onNext();
+              }}
+              className="flex-1 rounded-xl bg-[var(--color-primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-lg transition-colors hover:bg-[var(--color-primary-dark)]"
             >
-              我去补充信息
+              <CheckCircle2 className="mr-1.5 inline h-4 w-4" />
+              提交补充信息，继续下一步
             </button>
             <button
               onClick={() => { setShowCheckDialog(false); onNext(); }}
               className="rounded-xl border border-[var(--color-border)] px-4 py-2.5 text-sm font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-gray-50"
             >
-              跳过，直接生成
+              跳过
             </button>
           </div>
         </div>

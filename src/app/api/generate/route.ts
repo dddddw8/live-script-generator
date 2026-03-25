@@ -7,6 +7,7 @@ export const maxDuration = 60;
 const oversea = createOpenAI({
   apiKey: process.env.OPENAI_API_KEY,
   baseURL: process.env.OPENAI_BASE_URL,
+  ...({ compatibility: "compatible" } as Record<string, unknown>),
 });
 
 export async function POST(req: Request) {
@@ -90,7 +91,7 @@ ${sellingPoints.map((p: string, i: number) => `${i + 1}. ${p}`).join("\n")}
 请按照话术结构要求，运用 AIDA 模型和 FABE 原则，生成约 ${wordCount} 字的完整直播话术。每个部分用 ### 标题分隔。`;
 
   const result = streamText({
-    model: oversea("sonnet-4.6"),
+    model: oversea.chat("sonnet-4.6"),
     system: systemPrompt,
     prompt: userPrompt,
   });

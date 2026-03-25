@@ -8,11 +8,13 @@ export const maxDuration = 120;
 const oversea = createOpenAI({
   apiKey: process.env.OPENAI_API_KEY,
   baseURL: process.env.OPENAI_BASE_URL,
+  ...({ compatibility: "compatible" } as Record<string, unknown>),
 });
 
 const domestic = createOpenAI({
   apiKey: process.env.DOMESTIC_API_KEY,
   baseURL: process.env.DOMESTIC_BASE_URL,
+  ...({ compatibility: "compatible" } as Record<string, unknown>),
 });
 
 export async function POST(req: Request) {
@@ -72,7 +74,7 @@ ${sellingPoints.map((p: string, i: number) => `${i + 1}. ${p}`).join("\n")}
     const results = await Promise.allSettled(
       models.map(async (m) => {
         const result = await generateText({
-          model: m.provider(m.id),
+          model: m.provider.chat(m.id),
           system: systemPrompt,
           prompt: userPrompt,
         });

@@ -301,7 +301,7 @@ export function StepForbidden({ state, updateState, onNext, onPrev }: Props) {
                       <div className="flex items-center gap-3 text-sm">
                         <span className="forbidden-word">{item.original}</span>
                         <span className="text-[var(--color-text-secondary)]">&rarr;</span>
-                        <input type="text" value={item.userReplacement || ""} onChange={(e) => updateReplacement(items.indexOf(item), e.target.value)} className="replacement-word border-none bg-transparent outline-none min-w-[4em]" style={{ width: `${(item.userReplacement || "").length + 2}em` }} />
+                        <input type="text" value={item.userReplacement || ""} onChange={(e) => updateReplacement(items.indexOf(item), e.target.value)} className="replacement-word border-none bg-transparent outline-none w-full max-w-xs" />
                       </div>
                     </div>
                     <button onClick={() => toggleAccept(items.indexOf(item))} className={cn("shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors", item.accepted ? "bg-[var(--color-primary)] text-white" : "border border-[var(--color-border)] text-[var(--color-text-secondary)]")}>

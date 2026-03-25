@@ -19,6 +19,7 @@ export type GenerateState = {
   loopMinutes: number;
   generatedScript: string;
   checkedScript: string;
+  aiRecommendation: string;
   forbiddenResult: {
     total_found: number;
     total_replaced: number;
@@ -51,6 +52,7 @@ export default function GeneratePage() {
     loopMinutes: 8,
     generatedScript: "",
     checkedScript: "",
+    aiRecommendation: "",
     forbiddenResult: null,
   });
 

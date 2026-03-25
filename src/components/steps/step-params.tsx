@@ -2,7 +2,7 @@
 
 import type { GenerateState } from "@/app/generate/page";
 import { STYLE_OPTIONS, WORD_COUNT_OPTIONS, LOOP_TIME_OPTIONS } from "@/lib/script-templates";
-import { ArrowLeft, ArrowRight, BookOpen, Heart, Zap, Award } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, Heart, Zap, Award, Lightbulb } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const styleIcons: Record<string, React.ElementType> = {
@@ -25,6 +25,20 @@ export function StepParams({ state, updateState, onNext, onPrev }: Props) {
           选择话术风格、字数和闭环时间，系统已根据产品类型给出推荐值
         </p>
       </div>
+
+      {/* AI recommendation from Step 2 */}
+      {state.aiRecommendation && (
+        <div className="flex items-start gap-3 rounded-xl bg-indigo-50 p-4 text-sm">
+          <Lightbulb className="mt-0.5 h-5 w-5 shrink-0 text-indigo-500" />
+          <div>
+            <p className="font-medium text-indigo-800">AI 专业建议（基于产品分析）</p>
+            <p className="mt-1 leading-relaxed text-indigo-700">{state.aiRecommendation}</p>
+            <p className="mt-2 text-xs text-indigo-500">
+              已为你预选推荐的字数（{state.wordCount}字）和闭环时间（{state.loopMinutes}分钟），你也可以手动调整
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Style selection */}
       <div>

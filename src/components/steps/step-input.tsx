@@ -358,101 +358,104 @@ ${fieldsList}
         )}
       </div>
 
-      {/* Info check dialog - interactive Q&A */}
+      {/* Modal overlay - info check Q&A */}
       {showCheckDialog && missingFields.length > 0 && (
-        <div className="animate-fade-in rounded-2xl border-2 border-[var(--color-primary)]/30 bg-[var(--color-surface)] p-5 shadow-lg">
-          <div className="mb-4 flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-primary)]/10">
-              <MessageSquare className="h-4 w-4 text-[var(--color-primary)]" />
-            </div>
-            <div>
-              <h3 className="text-base font-semibold">还需要补充一些信息</h3>
-              <p className="text-xs text-[var(--color-text-secondary)]">
-                补充后话术质量会更高，也可以跳过直接生成
-              </p>
-            </div>
-          </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => { setShowCheckDialog(false); onNext(); }} />
 
-          <div className="space-y-4">
-            {missingFields.map((item, idx) => (
-              <div key={idx} className="rounded-xl border border-[var(--color-border)] bg-gray-50/50 p-4">
-                <div className="mb-2 flex items-start gap-2">
-                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)] text-xs font-bold text-white">
-                    {idx + 1}
-                  </span>
-                  <p className="text-sm font-medium">{item.question}</p>
-                </div>
-
-                {/* Answer input */}
-                <div className="ml-7">
-                  <textarea
-                    value={answers[idx] || ""}
-                    onChange={(e) => setAnswers((prev) => ({ ...prev, [idx]: e.target.value }))}
-                    placeholder={`例如：${item.example}`}
-                    rows={2}
-                    className="w-full rounded-lg border border-[var(--color-border)] bg-white p-3 text-sm leading-relaxed placeholder:text-[var(--color-text-secondary)]/50 focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20"
-                  />
-
-                  {/* Upload button for this question */}
-                  <button
-                    onClick={() => questionFileRefs.current[idx]?.click()}
-                    className="mt-1.5 inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs text-[var(--color-text-secondary)] transition-colors hover:bg-gray-100"
-                  >
-                    <Upload className="h-3 w-3" />
-                    上传图片/文件补充
-                  </button>
-                  <input
-                    ref={(el) => { questionFileRefs.current[idx] = el; }}
-                    type="file"
-                    accept="image/*,.txt,.md,.pdf"
-                    className="hidden"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      if (file.type.startsWith("image/")) {
-                        setAnswers((prev) => ({ ...prev, [idx]: (prev[idx] || "") + `\n[已上传图片: ${file.name}]` }));
-                      } else {
-                        const text = await file.text();
-                        setAnswers((prev) => ({ ...prev, [idx]: (prev[idx] || "") + "\n" + text.slice(0, 1000) }));
-                      }
-                      e.target.value = "";
-                    }}
-                  />
-                </div>
+          {/* Modal */}
+          <div className="animate-fade-in relative z-10 w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-2xl bg-[var(--color-surface)] p-6 shadow-2xl">
+            <div className="mb-5 flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)]/10">
+                <MessageSquare className="h-5 w-5 text-[var(--color-primary)]" />
               </div>
-            ))}
-          </div>
+              <div>
+                <h3 className="text-lg font-bold">还需要补充一些信息</h3>
+                <p className="text-xs text-[var(--color-text-secondary)]">
+                  补充后话术质量会更高，也可以跳过直接生成
+                </p>
+              </div>
+            </div>
 
-          <div className="mt-5 flex gap-3">
-            <button
-              onClick={() => {
-                const supplementText = missingFields
-                  .map((item, idx) => {
-                    const answer = answers[idx]?.trim();
-                    return answer ? `${item.field}：${answer}` : null;
-                  })
-                  .filter(Boolean)
-                  .join("\n");
+            <div className="space-y-4">
+              {missingFields.map((item, idx) => (
+                <div key={idx} className="rounded-xl border border-[var(--color-border)] bg-gray-50/50 p-4">
+                  <div className="mb-2.5 flex items-start gap-2">
+                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)] text-xs font-bold text-white">
+                      {idx + 1}
+                    </span>
+                    <p className="text-sm font-medium">{item.question}</p>
+                  </div>
 
-                if (supplementText) {
-                  updateState({
-                    productInfo: state.productInfo + "\n\n" + supplementText,
-                  });
-                }
-                setShowCheckDialog(false);
-                onNext();
-              }}
-              className="flex-1 rounded-xl bg-[var(--color-primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-lg transition-colors hover:bg-[var(--color-primary-dark)]"
-            >
-              <CheckCircle2 className="mr-1.5 inline h-4 w-4" />
-              提交补充信息，继续下一步
-            </button>
-            <button
-              onClick={() => { setShowCheckDialog(false); onNext(); }}
-              className="rounded-xl border border-[var(--color-border)] px-4 py-2.5 text-sm font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-gray-50"
-            >
-              跳过
-            </button>
+                  <div className="ml-7">
+                    <textarea
+                      value={answers[idx] || ""}
+                      onChange={(e) => setAnswers((prev) => ({ ...prev, [idx]: e.target.value }))}
+                      placeholder={`例如：${item.example}`}
+                      rows={2}
+                      className="w-full rounded-lg border border-[var(--color-border)] bg-white p-3 text-sm leading-relaxed placeholder:text-[var(--color-text-secondary)]/50 focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20"
+                    />
+                    <button
+                      onClick={() => questionFileRefs.current[idx]?.click()}
+                      className="mt-1.5 inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs text-[var(--color-text-secondary)] transition-colors hover:bg-gray-100"
+                    >
+                      <Upload className="h-3 w-3" />
+                      上传图片/文件补充
+                    </button>
+                    <input
+                      ref={(el) => { questionFileRefs.current[idx] = el; }}
+                      type="file"
+                      accept="image/*,.txt,.md,.pdf"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        if (file.type.startsWith("image/")) {
+                          setAnswers((prev) => ({ ...prev, [idx]: (prev[idx] || "") + `\n[已上传图片: ${file.name}]` }));
+                        } else {
+                          const text = await file.text();
+                          setAnswers((prev) => ({ ...prev, [idx]: (prev[idx] || "") + "\n" + text.slice(0, 1000) }));
+                        }
+                        e.target.value = "";
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-5 flex gap-3">
+              <button
+                onClick={() => {
+                  const supplementText = missingFields
+                    .map((item, idx) => {
+                      const answer = answers[idx]?.trim();
+                      return answer ? `${item.field}：${answer}` : null;
+                    })
+                    .filter(Boolean)
+                    .join("\n");
+
+                  if (supplementText) {
+                    updateState({
+                      productInfo: state.productInfo + "\n\n" + supplementText,
+                    });
+                  }
+                  setShowCheckDialog(false);
+                  onNext();
+                }}
+                className="flex-1 rounded-xl bg-[var(--color-primary)] px-4 py-3 text-sm font-semibold text-white shadow-lg transition-colors hover:bg-[var(--color-primary-dark)]"
+              >
+                <CheckCircle2 className="mr-1.5 inline h-4 w-4" />
+                提交并继续
+              </button>
+              <button
+                onClick={() => { setShowCheckDialog(false); onNext(); }}
+                className="rounded-xl border border-[var(--color-border)] px-4 py-3 text-sm font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-gray-50"
+              >
+                跳过
+              </button>
+            </div>
           </div>
         </div>
       )}

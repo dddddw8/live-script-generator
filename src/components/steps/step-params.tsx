@@ -78,61 +78,75 @@ export function StepParams({ state, updateState, onNext, onPrev }: Props) {
       {/* Word count */}
       <div>
         <label className="mb-3 block text-sm font-medium">话术字数</label>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {WORD_COUNT_OPTIONS.map((opt) => {
-            const isRecommended = opt.value === state.wordCount && state.aiRecommendation;
-            return (
-              <button
-                key={opt.value}
-                onClick={() => updateState({ wordCount: opt.value })}
-                className={cn(
-                  "relative rounded-xl border-2 p-4 text-left transition-all",
-                  state.wordCount === opt.value
-                    ? "border-[var(--color-primary)] bg-[var(--color-primary)]/5"
-                    : "border-[var(--color-border)] hover:border-[var(--color-primary)]/30"
-                )}
-              >
-                {isRecommended && (
-                  <span className="absolute -top-2.5 right-3 inline-flex items-center gap-1 rounded-full bg-[var(--color-primary)] px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
-                    <Lightbulb className="h-2.5 w-2.5" />AI 推荐
-                  </span>
-                )}
-                <p className="text-xl font-bold">{opt.label}</p>
-                <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{opt.description}</p>
-                <p className="mt-0.5 text-xs text-[var(--color-primary)]">适合：{opt.recommended_for}</p>
-              </button>
-            );
-          })}
+        <div className="grid gap-3 sm:grid-cols-4">
+          {/* AI Recommended option */}
+          {state.aiRecommendation && (
+            <button
+              onClick={() => updateState({ wordCount: state.wordCount })}
+              className={cn(
+                "rounded-xl border-2 p-4 text-left transition-all border-[var(--color-primary)] bg-gradient-to-br from-indigo-50 to-purple-50"
+              )}
+            >
+              <div className="mb-1 inline-flex items-center gap-1 rounded-full bg-[var(--color-primary)] px-2 py-0.5 text-[10px] font-bold text-white">
+                <Lightbulb className="h-2.5 w-2.5" />AI 推荐
+              </div>
+              <p className="text-xl font-bold text-[var(--color-primary)]">{state.wordCount}字</p>
+              <p className="mt-1 text-xs text-indigo-600">基于产品分析的最佳推荐</p>
+            </button>
+          )}
+          {WORD_COUNT_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => updateState({ wordCount: opt.value })}
+              className={cn(
+                "rounded-xl border-2 p-4 text-left transition-all",
+                state.wordCount === opt.value
+                  ? "border-[var(--color-primary)] bg-[var(--color-primary)]/5"
+                  : "border-[var(--color-border)] hover:border-[var(--color-primary)]/30"
+              )}
+            >
+              <p className="text-xl font-bold">{opt.label}</p>
+              <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{opt.description}</p>
+              <p className="mt-0.5 text-xs text-[var(--color-primary)]">适合：{opt.recommended_for}</p>
+            </button>
+          ))}
         </div>
       </div>
 
       {/* Loop time */}
       <div>
         <label className="mb-3 block text-sm font-medium">话术闭环时间</label>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {LOOP_TIME_OPTIONS.map((opt) => {
-            const isRecommended = opt.value === state.loopMinutes && state.aiRecommendation;
-            return (
-              <button
-                key={opt.value}
-                onClick={() => updateState({ loopMinutes: opt.value })}
-                className={cn(
-                  "relative rounded-xl border-2 p-4 text-left transition-all",
-                  state.loopMinutes === opt.value
-                    ? "border-[var(--color-primary)] bg-[var(--color-primary)]/5"
-                    : "border-[var(--color-border)] hover:border-[var(--color-primary)]/30"
-                )}
-              >
-                {isRecommended && (
-                  <span className="absolute -top-2.5 right-3 inline-flex items-center gap-1 rounded-full bg-[var(--color-primary)] px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
-                    <Lightbulb className="h-2.5 w-2.5" />AI 推荐
-                  </span>
-                )}
-                <p className="text-xl font-bold">{opt.label}</p>
-                <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{opt.description}</p>
-              </button>
-            );
-          })}
+        <div className="grid gap-3 sm:grid-cols-4">
+          {/* AI Recommended option */}
+          {state.aiRecommendation && (
+            <button
+              onClick={() => updateState({ loopMinutes: state.loopMinutes })}
+              className={cn(
+                "rounded-xl border-2 p-4 text-left transition-all border-[var(--color-primary)] bg-gradient-to-br from-indigo-50 to-purple-50"
+              )}
+            >
+              <div className="mb-1 inline-flex items-center gap-1 rounded-full bg-[var(--color-primary)] px-2 py-0.5 text-[10px] font-bold text-white">
+                <Lightbulb className="h-2.5 w-2.5" />AI 推荐
+              </div>
+              <p className="text-xl font-bold text-[var(--color-primary)]">{state.loopMinutes}分钟</p>
+              <p className="mt-1 text-xs text-indigo-600">基于产品分析的最佳推荐</p>
+            </button>
+          )}
+          {LOOP_TIME_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => updateState({ loopMinutes: opt.value })}
+              className={cn(
+                "rounded-xl border-2 p-4 text-left transition-all",
+                state.loopMinutes === opt.value
+                  ? "border-[var(--color-primary)] bg-[var(--color-primary)]/5"
+                  : "border-[var(--color-border)] hover:border-[var(--color-primary)]/30"
+              )}
+            >
+              <p className="text-xl font-bold">{opt.label}</p>
+              <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{opt.description}</p>
+            </button>
+          ))}
         </div>
       </div>
 

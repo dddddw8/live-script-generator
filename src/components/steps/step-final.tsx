@@ -23,9 +23,10 @@ export function StepFinal({ state, updateState, onPrev }: Props) {
   const [copied, setCopied] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState("");
+  const [customFileName, setCustomFileName] = useState(state.productName || "直播话术");
 
   const finalText = state.checkedScript || state.generatedScript;
-  const fileName = state.productName || "话术";
+  const fileName = customFileName || "话术";
   const dateStr = new Date().toLocaleDateString("zh-CN");
 
   const handleCopy = async () => {
@@ -38,7 +39,7 @@ export function StepFinal({ state, updateState, onPrev }: Props) {
     setSaving(true);
     try {
       await saveScript({
-        product_name: state.productName || "未命名产品",
+        product_name: customFileName || state.productName || "未命名产品",
         product_info: state.productInfo,
         selling_points: state.sellingPoints,
         style: state.style,
@@ -208,6 +209,16 @@ ${bodyHtml}
           <Download className="mr-1.5 inline h-4 w-4 text-[var(--color-primary)]" />
           下载话术
         </p>
+        <div className="mb-4">
+          <label className="mb-1.5 block text-xs font-medium text-[var(--color-text-secondary)]">文件名称</label>
+          <input
+            type="text"
+            value={customFileName}
+            onChange={(e) => setCustomFileName(e.target.value)}
+            placeholder="输入文件名称"
+            className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20"
+          />
+        </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
           <button onClick={downloadPdf} className="flex flex-col items-center gap-2 rounded-xl border-2 border-red-200 bg-red-50 p-4 transition-all hover:border-red-400 hover:shadow-md active:scale-95">
             <Printer className="h-6 w-6 text-red-600" />

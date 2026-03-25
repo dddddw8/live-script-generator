@@ -66,14 +66,14 @@ export default function GeneratePage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
       {/* Step indicator */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between">
+      <div className="mb-8 overflow-x-auto">
+        <div className="flex items-center justify-between min-w-[500px]">
           {STEPS.map((step, idx) => (
-            <div key={step.id} className="flex items-center">
+            <div key={step.id} className="flex items-center flex-1">
               <div className="flex flex-col items-center">
                 <div
                   className={cn(
-                    "flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold transition-all",
+                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold transition-all",
                     currentStep > step.id
                       ? "bg-green-500 text-white"
                       : currentStep === step.id
@@ -81,11 +81,11 @@ export default function GeneratePage() {
                         : "bg-[var(--color-border)] text-[var(--color-text-secondary)]"
                   )}
                 >
-                  {currentStep > step.id ? <Check className="h-5 w-5" /> : step.id}
+                  {currentStep > step.id ? <Check className="h-4 w-4" /> : step.id}
                 </div>
                 <span
                   className={cn(
-                    "mt-2 text-xs font-medium",
+                    "mt-1.5 whitespace-nowrap text-[11px] font-medium",
                     currentStep >= step.id ? "text-[var(--color-text)]" : "text-[var(--color-text-secondary)]"
                   )}
                 >
@@ -95,7 +95,7 @@ export default function GeneratePage() {
               {idx < STEPS.length - 1 && (
                 <div
                   className={cn(
-                    "mx-2 h-0.5 w-8 sm:w-16 lg:w-24 transition-colors",
+                    "mx-1 h-0.5 flex-1 transition-colors",
                     currentStep > step.id ? "bg-green-500" : "bg-[var(--color-border)]"
                   )}
                 />

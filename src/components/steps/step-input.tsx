@@ -1,16 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import type { GenerateState } from "@/app/generate/page";
 import { CATEGORY_TEMPLATES } from "@/lib/script-templates";
 import {
   GraduationCap, Sparkles, UtensilsCrossed, Smartphone, Home, PenTool,
-  ArrowRight, MessageSquare,
+  ArrowRight, MessageSquare, Upload, X, FileText, Image as ImageIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const iconMap: Record<string, React.ElementType> = {
   GraduationCap, Sparkles, UtensilsCrossed, Smartphone, Home, PenTool,
+};
+
+type UploadedFile = {
+  name: string;
+  type: string;
+  content: string;
+  preview?: string;
 };
 
 type Props = {
@@ -21,13 +28,71 @@ type Props = {
 
 export function StepInput({ state, updateState, onNext }: Props) {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleCategorySelect = (catId: string) => {
     setSelectedCategory(catId);
     const cat = CATEGORY_TEMPLATES.find((c) => c.id === catId);
-    if (cat && cat.default_info && !state.productInfo) {
+    if (cat && cat.default_info) {
       updateState({ productInfo: cat.default_info });
     }
+  };
+
+  const currentPlaceholder = (() => {
+    if (selectedCategory) {
+      const cat = CATEGORY_TEMPLATES.find((c) => c.id === selectedCategory);
+      if (cat?.placeholder) return cat.placeholder;
+    }
+    return `请描述你要售卖的产品，建议包含以下信息：
+
+产品名称：
+目标人群：
+售价：
+核心卖点：（3-5个）
+品牌优势：
+竞品对比：
+促销策略：
+
+描述越详细，生成的话术越精准。你也可以直接用自然语言描述。`;
+  })();
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    for (const file of Array.from(files)) {
+      if (file.type.startsWith("image/")) {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const preview = ev.target?.result as string;
+          setUploadedFiles((prev) => [
+            ...prev,
+            { name: file.name, type: "image", content: `[已上传图片: ${file.name}]`, preview },
+          ]);
+          updateState({
+            productInfo: state.productInfo + `\n\n[参考图片: ${file.name}]`,
+          });
+        };
+        reader.readAsDataURL(file);
+      } else {
+        const text = await file.text();
+        const truncated = text.slice(0, 3000);
+        setUploadedFiles((prev) => [
+          ...prev,
+          { name: file.name, type: "text", content: truncated },
+        ]);
+        updateState({
+          productInfo: state.productInfo + `\n\n--- 来自文件 ${file.name} ---\n${truncated}`,
+        });
+      }
+    }
+
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const removeFile = (idx: number) => {
+    setUploadedFiles((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const canProceed = state.productInfo.trim().length >= 10;
@@ -75,19 +140,7 @@ export function StepInput({ state, updateState, onNext }: Props) {
         <textarea
           value={state.productInfo}
           onChange={(e) => updateState({ productInfo: e.target.value })}
-          placeholder={`请描述你要售卖的产品，例如：
-
-产品名称：斑马科学探究显微镜
-目标人群：3-12岁孩子的家长
-售价：299元
-核心卖点：1200倍专业放大、全套实验工具、三种观察模式、双光源设计
-品牌优势：斑马是专业儿童启蒙品牌，全国3000万用户
-竞品对比：市面上同配置显微镜300+起步
-促销策略：拍1发22，送12节科普视频课
-
-你也可以直接用自然语言描述，比如：
-"我们要卖一款儿童显微镜，299元，斑马品牌的，主打科学启蒙..."
-`}
+          placeholder={currentPlaceholder}
           rows={12}
           className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-sm leading-relaxed placeholder:text-[var(--color-text-secondary)]/50 focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20"
         />
@@ -95,6 +148,70 @@ export function StepInput({ state, updateState, onNext }: Props) {
           <span>描述越详细，生成的话术越精准</span>
           <span>{state.productInfo.length} 字</span>
         </div>
+      </div>
+
+      {/* File upload */}
+      <div>
+        <label className="mb-2 block text-sm font-medium">
+          <Upload className="mr-1 inline h-4 w-4" />
+          上传补充材料（可选）
+        </label>
+        <div
+          onClick={() => fileInputRef.current?.click()}
+          className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-[var(--color-border)] bg-[var(--color-surface)] p-6 transition-colors hover:border-[var(--color-primary)]/50 hover:bg-[var(--color-primary)]/5"
+        >
+          <Upload className="h-6 w-6 text-[var(--color-text-secondary)]" />
+          <p className="text-sm text-[var(--color-text-secondary)]">
+            点击上传产品图片、竞品截图、需求文档等
+          </p>
+          <p className="text-xs text-[var(--color-text-secondary)]/70">
+            支持 图片（JPG/PNG）、文本（TXT/MD）、文档（PDF）
+          </p>
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept="image/*,.txt,.md,.pdf,.doc,.docx"
+          onChange={handleFileUpload}
+          className="hidden"
+        />
+
+        {/* Uploaded files list */}
+        {uploadedFiles.length > 0 && (
+          <div className="mt-3 space-y-2">
+            {uploadedFiles.map((file, idx) => (
+              <div
+                key={idx}
+                className="flex items-center gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2.5"
+              >
+                {file.preview ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={file.preview}
+                    alt={file.name}
+                    className="h-10 w-10 rounded object-cover"
+                  />
+                ) : (
+                  <div className="flex h-10 w-10 items-center justify-center rounded bg-gray-100">
+                    {file.type === "image" ? (
+                      <ImageIcon className="h-5 w-5 text-gray-400" />
+                    ) : (
+                      <FileText className="h-5 w-5 text-gray-400" />
+                    )}
+                  </div>
+                )}
+                <span className="flex-1 truncate text-sm">{file.name}</span>
+                <button
+                  onClick={() => removeFile(idx)}
+                  className="shrink-0 rounded-lg p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Next button */}

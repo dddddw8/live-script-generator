@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useCompletion } from "@ai-sdk/react";
+import { useState, useEffect, useCallback } from "react";
 import type { GenerateState } from "@/app/generate/page";
 import { ArrowLeft, ArrowRight, Loader2, RefreshCw, Copy, Check, Layers, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -26,43 +25,65 @@ export function StepGenerate({ state, updateState, onNext, onPrev }: Props) {
   const [editText, setEditText] = useState("");
   const [copied, setCopied] = useState(false);
   const [hasGenerated, setHasGenerated] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [streamingText, setStreamingText] = useState("");
 
-  // Multi-model state
   const [multiVersions, setMultiVersions] = useState<ModelVersion[]>([]);
   const [multiLoading, setMultiLoading] = useState(false);
   const [selectedVersion, setSelectedVersion] = useState(0);
 
-  const { complete, isLoading, completion } = useCompletion({
-    api: "/api/generate",
-  });
+  const startSingleGeneration = useCallback(async () => {
+    setHasGenerated(false);
+    setMode("single");
+    setIsLoading(true);
+    setStreamingText("");
+
+    try {
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productInfo: state.productInfo,
+          sellingPoints: state.sellingPoints,
+          style: state.style,
+          wordCount: state.wordCount,
+          loopMinutes: state.loopMinutes,
+        }),
+      });
+
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("No response body");
+
+      const decoder = new TextDecoder();
+      let fullText = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        fullText += chunk;
+        setStreamingText(fullText);
+      }
+
+      updateState({ generatedScript: fullText });
+      setHasGenerated(true);
+    } catch (err) {
+      console.error("Generation failed:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [state.productInfo, state.sellingPoints, state.style, state.wordCount, state.loopMinutes, updateState]);
 
   useEffect(() => {
     if (state.generatedScript) {
+      setStreamingText(state.generatedScript);
       setHasGenerated(true);
       return;
     }
     startSingleGeneration();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const startSingleGeneration = async () => {
-    setHasGenerated(false);
-    setMode("single");
-    const result = await complete(state.productInfo, {
-      body: {
-        productInfo: state.productInfo,
-        sellingPoints: state.sellingPoints,
-        style: state.style,
-        wordCount: state.wordCount,
-        loopMinutes: state.loopMinutes,
-        modelId: "openai",
-      },
-    });
-    if (result) {
-      updateState({ generatedScript: result });
-      setHasGenerated(true);
-    }
-  };
+  }, [state.generatedScript, startSingleGeneration]);
 
   const startMultiGeneration = async () => {
     setMode("multi");
@@ -85,6 +106,7 @@ export function StepGenerate({ state, updateState, onNext, onPrev }: Props) {
         setMultiVersions(data.versions);
         setSelectedVersion(0);
         updateState({ generatedScript: data.versions[0].text });
+        setStreamingText(data.versions[0].text);
         setHasGenerated(true);
       }
     } catch (err) {
@@ -97,7 +119,7 @@ export function StepGenerate({ state, updateState, onNext, onPrev }: Props) {
   const handleCopy = async () => {
     const text = mode === "multi" && multiVersions.length > 0
       ? multiVersions[selectedVersion].text
-      : (state.generatedScript || completion);
+      : (state.generatedScript || streamingText);
     if (text) {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -108,13 +130,14 @@ export function StepGenerate({ state, updateState, onNext, onPrev }: Props) {
   const handleEdit = () => {
     const text = mode === "multi" && multiVersions.length > 0
       ? multiVersions[selectedVersion].text
-      : (state.generatedScript || completion);
+      : (state.generatedScript || streamingText);
     setEditText(text);
     setIsEditing(true);
   };
 
   const handleSaveEdit = () => {
     updateState({ generatedScript: editText });
+    setStreamingText(editText);
     setIsEditing(false);
     setHasGenerated(true);
   };
@@ -122,11 +145,12 @@ export function StepGenerate({ state, updateState, onNext, onPrev }: Props) {
   const selectMultiVersion = (idx: number) => {
     setSelectedVersion(idx);
     updateState({ generatedScript: multiVersions[idx].text });
+    setStreamingText(multiVersions[idx].text);
   };
 
   const displayText = mode === "multi" && multiVersions.length > 0
     ? multiVersions[selectedVersion].text
-    : (state.generatedScript || completion);
+    : (state.generatedScript || streamingText);
   const wordCount = displayText.length;
   const loading = isLoading || multiLoading;
 
@@ -142,7 +166,7 @@ export function StepGenerate({ state, updateState, onNext, onPrev }: Props) {
       {/* Mode toggle */}
       <div className="flex gap-2">
         <button
-          onClick={startSingleGeneration}
+          onClick={() => { if (!loading) startSingleGeneration(); }}
           disabled={loading}
           className={cn(
             "inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all",
@@ -155,7 +179,7 @@ export function StepGenerate({ state, updateState, onNext, onPrev }: Props) {
           单模型快速生成
         </button>
         <button
-          onClick={startMultiGeneration}
+          onClick={() => { if (!loading) startMultiGeneration(); }}
           disabled={loading}
           className={cn(
             "inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-all",
@@ -177,7 +201,7 @@ export function StepGenerate({ state, updateState, onNext, onPrev }: Props) {
             {mode === "multi" ? "多个 AI 模型正在同时生成..." : "AI 正在生成话术..."}
           </span>
           {mode === "single" && (
-            <span className="text-xs text-indigo-500">已生成 {completion.length} 字</span>
+            <span className="text-xs text-indigo-500">已生成 {streamingText.length} 字</span>
           )}
         </div>
       )}
@@ -293,8 +317,8 @@ export function StepGenerate({ state, updateState, onNext, onPrev }: Props) {
         </button>
         <button
           onClick={() => {
-            if (!state.generatedScript && completion) {
-              updateState({ generatedScript: completion });
+            if (!state.generatedScript && streamingText) {
+              updateState({ generatedScript: streamingText });
             }
             onNext();
           }}

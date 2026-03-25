@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useCompletion } from "@ai-sdk/react";
+import { useState, useEffect, useCallback } from "react";
 import type { GenerateState } from "@/app/generate/page";
 import { ArrowLeft, ArrowRight, Loader2, Plus, X, Lightbulb } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -26,44 +25,66 @@ export function StepAnalyze({ state, updateState, onNext, onPrev }: Props) {
   const [newPoint, setNewPoint] = useState("");
   const [editingPoints, setEditingPoints] = useState<string[]>(state.sellingPoints);
   const [hasAnalyzed, setHasAnalyzed] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [streamText, setStreamText] = useState("");
 
-  const { complete, isLoading, completion } = useCompletion({
-    api: "/api/analyze",
-  });
-
-  useEffect(() => {
+  const startAnalysis = useCallback(async () => {
     if (state.sellingPoints.length > 0) {
       setEditingPoints(state.sellingPoints);
       setHasAnalyzed(true);
       return;
     }
-    startAnalysis();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
-  const startAnalysis = async () => {
+    setIsLoading(true);
+    setStreamText("");
+
     try {
-      const result = await complete(state.productInfo, {
-        body: { productInfo: state.productInfo },
+      const res = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productInfo: state.productInfo }),
       });
-      if (result) {
-        const cleaned = result.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-        const parsed: AnalysisResult = JSON.parse(cleaned);
-        setAnalysis(parsed);
-        const points = parsed.selling_points.map((p) => p.text);
-        setEditingPoints(points);
-        updateState({
-          productName: parsed.product_name,
-          sellingPoints: points,
-          wordCount: parsed.recommended_word_count,
-          loopMinutes: parsed.recommended_loop_minutes,
-        });
-        setHasAnalyzed(true);
+
+      if (!res.ok) {
+        throw new Error(`API error: ${res.status}`);
       }
-    } catch {
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("No response body");
+
+      const decoder = new TextDecoder();
+      let fullText = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        fullText += chunk;
+        setStreamText(fullText);
+      }
+
+      const cleaned = fullText.replace(/```json\n?/g, "").replace(/```\n?/g, "").replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+      const parsed: AnalysisResult = JSON.parse(cleaned);
+      setAnalysis(parsed);
+      const points = parsed.selling_points.map((p) => p.text);
+      setEditingPoints(points);
+      updateState({
+        productName: parsed.product_name,
+        sellingPoints: points,
+        wordCount: parsed.recommended_word_count,
+        loopMinutes: parsed.recommended_loop_minutes,
+      });
+    } catch (err) {
+      console.error("Analysis failed:", err);
+    } finally {
+      setIsLoading(false);
       setHasAnalyzed(true);
     }
-  };
+  }, [state.productInfo, state.sellingPoints, updateState]);
+
+  useEffect(() => {
+    startAnalysis();
+  }, [startAnalysis]);
 
   const addPoint = () => {
     if (newPoint.trim()) {
@@ -95,9 +116,9 @@ export function StepAnalyze({ state, updateState, onNext, onPrev }: Props) {
         <div className="flex flex-col items-center gap-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-12">
           <Loader2 className="h-8 w-8 animate-spin text-[var(--color-primary)]" />
           <p className="text-sm text-[var(--color-text-secondary)]">AI 正在分析产品卖点...</p>
-          {completion && (
+          {streamText && (
             <pre className="mt-2 max-h-32 w-full overflow-auto rounded-lg bg-gray-50 p-3 text-xs text-gray-500">
-              {completion.slice(0, 200)}...
+              {streamText.slice(0, 200)}...
             </pre>
           )}
         </div>

@@ -22,6 +22,8 @@ function buildPrompts(state: GenerateState) {
     .map((s) => `### ${s.name}\n要求：${s.prompt_hint}\n运用技巧：${s.techniques.join("、")}`)
     .join("\n\n");
 
+  const perSectionWords = Math.round(state.wordCount / 6);
+
   const system = `你是一位资深直播带货话术专家。你精通 AIDA 模型和 FABE 卖点原则。
 
 ## 话术品牌化三要素
@@ -33,10 +35,18 @@ function buildPrompts(state: GenerateState) {
 ## 话术结构要求
 ${sectionsGuide}
 
-## 风格：${styleOption?.name || "知识科普型"}：${styleOption?.prompt_extra || ""}
-## 字数：约 ${state.wordCount} 字（${state.loopMinutes}分钟闭环）
+## 话术风格
+${styleOption?.name || "知识科普型"}：${styleOption?.prompt_extra || ""}
 
-规则：口语化、有感染力、加互动引导、运用FABE原则、不用违禁词、自然过渡。`;
+## 【极其重要】字数硬性要求
+- 总字数必须严格控制在 ${state.wordCount} 字左右（允许上下浮动10%，即 ${Math.round(state.wordCount * 0.9)}-${Math.round(state.wordCount * 1.1)} 字之间）
+- 对应 ${state.loopMinutes} 分钟的话术闭环（按每分钟约200字的语速计算）
+- 每个章节平均约 ${perSectionWords} 字，根据重要程度可适当调整
+- 绝对不能超过 ${Math.round(state.wordCount * 1.15)} 字！如果内容太多，请精简表达，突出重点
+- 写完后请自行检查字数，确保符合要求
+
+## 其他规则
+口语化、有感染力、加互动引导、运用FABE原则、不用违禁词、自然过渡。`;
 
   const prompt = `请为以下产品生成直播话术：
 
@@ -45,7 +55,7 @@ ${sectionsGuide}
 核心卖点：
 ${state.sellingPoints.map((p, i) => `${i + 1}. ${p}`).join("\n")}
 
-生成约 ${state.wordCount} 字的完整直播话术，每个部分用 ### 标题分隔。`;
+【再次强调】请严格控制总字数在 ${state.wordCount} 字左右（${Math.round(state.wordCount * 0.9)}-${Math.round(state.wordCount * 1.1)}字），对应 ${state.loopMinutes} 分钟话术闭环。每个部分用 ### 标题分隔。`;
 
   return { system, prompt };
 }

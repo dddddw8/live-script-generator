@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Mic, Zap, ShieldCheck, Clock, ArrowRight, Sparkles, BarChart3 } from "lucide-react";
+import { DemoAnimation } from "@/components/demo-animation";
 
 const features = [
   {
@@ -83,6 +84,9 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      {/* Demo Animation */}
+      <DemoAnimation />
 
       {/* Features */}
       <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6">

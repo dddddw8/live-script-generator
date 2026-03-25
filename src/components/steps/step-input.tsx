@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import type { GenerateState } from "@/app/generate/page";
 import { CATEGORY_TEMPLATES } from "@/lib/script-templates";
+import { visionChat } from "@/lib/ai-client";
 import {
   GraduationCap, Sparkles, UtensilsCrossed, Smartphone, Home, PenTool,
   ArrowRight, MessageSquare, Upload, X, FileText, Image as ImageIcon, Loader2, Eye,
@@ -65,33 +66,30 @@ export function StepInput({ state, updateState, onNext }: Props) {
     );
 
     try {
-      const res = await fetch("/api/analyze-image", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageBase64, fileName, mimeType }),
-      });
-      const data = await res.json();
+      const analysis = await visionChat({
+        imageBase64,
+        mimeType,
+        prompt: `你是一位资深直播带货运营专家。请仔细分析这张产品图片，提取以下信息。请直接输出分析结果，不要输出思考过程。
 
-      if (data.analysis) {
-        setUploadedFiles((prev) =>
-          prev.map((f, i) =>
-            i === fileIdx ? { ...f, analyzing: false, analysisResult: data.analysis } : f
-          )
-        );
-        updateState({
-          productInfo:
-            state.productInfo +
-            `\n\n--- AI 从图片「${fileName}」识别到的信息 ---\n${data.analysis}`,
-        });
-      } else {
-        setUploadedFiles((prev) =>
-          prev.map((f, i) =>
-            i === fileIdx
-              ? { ...f, analyzing: false, analysisResult: "识别失败，请手动补充信息" }
-              : f
-          )
-        );
-      }
+请用简洁的中文描述，格式如下：
+产品识别：xxx
+外观特征：xxx
+功能卖点：xxx
+包装内容：xxx（如果能看到的话）
+目标人群：xxx
+使用场景：xxx`,
+      });
+
+      setUploadedFiles((prev) =>
+        prev.map((f, i) =>
+          i === fileIdx ? { ...f, analyzing: false, analysisResult: analysis } : f
+        )
+      );
+      updateState({
+        productInfo:
+          state.productInfo +
+          `\n\n--- AI 从图片「${fileName}」识别到的信息 ---\n${analysis}`,
+      });
     } catch {
       setUploadedFiles((prev) =>
         prev.map((f, i) =>

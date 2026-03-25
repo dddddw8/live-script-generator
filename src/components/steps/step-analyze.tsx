@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import type { GenerateState } from "@/app/generate/page";
+import { streamChat } from "@/lib/ai-client";
 import { ArrowLeft, ArrowRight, Loader2, Plus, X, Lightbulb } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +21,28 @@ type AnalysisResult = {
   recommendation_reason: string;
 };
 
+const ANALYZE_SYSTEM = `你是一位资深直播带货运营专家。用户会给你一段产品信息描述，你需要：
+1. 背景分析：分析这个产品所在行业的市场情况、竞品格局、目标用户特征
+2. 卖点提炼：提炼 5-8 个核心卖点
+3. 卖点分类：分为功能卖点、情感卖点、价格卖点、信任卖点
+4. 参数推荐：推荐话术字数和闭环时间
+
+请直接输出JSON，不要输出思考过程，不要包含markdown代码块标记。格式：
+{
+  "product_name": "产品名称",
+  "market_analysis": "简要市场分析",
+  "target_audience": "目标用户画像",
+  "selling_points": [
+    {"text": "卖点描述", "category": "功能卖点"},
+    {"text": "卖点描述", "category": "情感卖点"},
+    {"text": "卖点描述", "category": "价格卖点"},
+    {"text": "卖点描述", "category": "信任卖点"}
+  ],
+  "recommended_word_count": 1500,
+  "recommended_loop_minutes": 8,
+  "recommendation_reason": "推荐理由"
+}`;
+
 export function StepAnalyze({ state, updateState, onNext, onPrev }: Props) {
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [newPoint, setNewPoint] = useState("");
@@ -27,6 +50,7 @@ export function StepAnalyze({ state, updateState, onNext, onPrev }: Props) {
   const [hasAnalyzed, setHasAnalyzed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [streamText, setStreamText] = useState("");
+  const [error, setError] = useState("");
 
   const startAnalysis = useCallback(async () => {
     if (state.sellingPoints.length > 0) {
@@ -37,49 +61,44 @@ export function StepAnalyze({ state, updateState, onNext, onPrev }: Props) {
 
     setIsLoading(true);
     setStreamText("");
+    setError("");
 
-    try {
-      const res = await fetch("/api/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productInfo: state.productInfo }),
-      });
-
-      if (!res.ok) {
-        throw new Error(`API error: ${res.status}`);
-      }
-
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error("No response body");
-
-      const decoder = new TextDecoder();
-      let fullText = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        fullText += chunk;
-        setStreamText(fullText);
-      }
-
-      const cleaned = fullText.replace(/```json\n?/g, "").replace(/```\n?/g, "").replace(/<think>[\s\S]*?<\/think>/g, "").trim();
-      const parsed: AnalysisResult = JSON.parse(cleaned);
-      setAnalysis(parsed);
-      const points = parsed.selling_points.map((p) => p.text);
-      setEditingPoints(points);
-      updateState({
-        productName: parsed.product_name,
-        sellingPoints: points,
-        wordCount: parsed.recommended_word_count,
-        loopMinutes: parsed.recommended_loop_minutes,
-      });
-    } catch (err) {
-      console.error("Analysis failed:", err);
-    } finally {
-      setIsLoading(false);
-      setHasAnalyzed(true);
-    }
+    streamChat({
+      model: "deepseek-v3",
+      node: "domestic",
+      system: ANALYZE_SYSTEM,
+      prompt: state.productInfo,
+      onChunk: (text) => setStreamText(text),
+      onDone: (fullText) => {
+        try {
+          const cleaned = fullText
+            .replace(/```json\n?/g, "")
+            .replace(/```\n?/g, "")
+            .replace(/<think>[\s\S]*?<\/think>/g, "")
+            .trim();
+          const parsed: AnalysisResult = JSON.parse(cleaned);
+          setAnalysis(parsed);
+          const points = parsed.selling_points.map((p) => p.text);
+          setEditingPoints(points);
+          updateState({
+            productName: parsed.product_name,
+            sellingPoints: points,
+            wordCount: parsed.recommended_word_count,
+            loopMinutes: parsed.recommended_loop_minutes,
+          });
+        } catch (err) {
+          console.error("Parse error:", err);
+          setError("AI 返回格式异常，请重试");
+        }
+        setIsLoading(false);
+        setHasAnalyzed(true);
+      },
+      onError: (err) => {
+        setError(err);
+        setIsLoading(false);
+        setHasAnalyzed(true);
+      },
+    });
   }, [state.productInfo, state.sellingPoints, updateState]);
 
   useEffect(() => {
@@ -112,21 +131,33 @@ export function StepAnalyze({ state, updateState, onNext, onPrev }: Props) {
         </p>
       </div>
 
-      {isLoading && !hasAnalyzed && (
+      {isLoading && (
         <div className="flex flex-col items-center gap-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-12">
           <Loader2 className="h-8 w-8 animate-spin text-[var(--color-primary)]" />
           <p className="text-sm text-[var(--color-text-secondary)]">AI 正在分析产品卖点...</p>
           {streamText && (
             <pre className="mt-2 max-h-32 w-full overflow-auto rounded-lg bg-gray-50 p-3 text-xs text-gray-500">
-              {streamText.slice(0, 200)}...
+              {streamText.slice(0, 300)}...
             </pre>
           )}
         </div>
       )}
 
-      {hasAnalyzed && (
+      {error && (
+        <div className="rounded-xl bg-red-50 p-4 text-sm text-red-700">
+          <p className="font-medium">分析失败</p>
+          <p className="mt-1">{error}</p>
+          <button
+            onClick={() => { setHasAnalyzed(false); setError(""); startAnalysis(); }}
+            className="mt-2 rounded-lg bg-red-100 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-200"
+          >
+            重试
+          </button>
+        </div>
+      )}
+
+      {hasAnalyzed && !error && (
         <>
-          {/* Product name */}
           <div>
             <label className="mb-2 block text-sm font-medium">产品名称</label>
             <input
@@ -138,7 +169,6 @@ export function StepAnalyze({ state, updateState, onNext, onPrev }: Props) {
             />
           </div>
 
-          {/* Recommendation */}
           {analysis?.recommendation_reason && (
             <div className="flex items-start gap-3 rounded-xl bg-amber-50 p-4 text-sm">
               <Lightbulb className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
@@ -149,75 +179,37 @@ export function StepAnalyze({ state, updateState, onNext, onPrev }: Props) {
             </div>
           )}
 
-          {/* Selling points */}
           <div>
             <label className="mb-3 block text-sm font-medium">
               核心卖点（{editingPoints.length} 个）
             </label>
             <div className="space-y-2">
               {editingPoints.map((point, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3"
-                >
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)]/10 text-xs font-semibold text-[var(--color-primary)]">
-                    {idx + 1}
-                  </span>
+                <div key={idx} className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)]/10 text-xs font-semibold text-[var(--color-primary)]">{idx + 1}</span>
                   <span className="flex-1 text-sm">{point}</span>
-                  <button
-                    onClick={() => removePoint(idx)}
-                    className="shrink-0 rounded-lg p-1 text-gray-400 hover:bg-red-50 hover:text-red-500"
-                  >
+                  <button onClick={() => removePoint(idx)} className="shrink-0 rounded-lg p-1 text-gray-400 hover:bg-red-50 hover:text-red-500">
                     <X className="h-4 w-4" />
                   </button>
                 </div>
               ))}
             </div>
-
-            {/* Add new point */}
             <div className="mt-3 flex gap-2">
-              <input
-                type="text"
-                value={newPoint}
-                onChange={(e) => setNewPoint(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && addPoint()}
-                placeholder="输入新的卖点..."
-                className="flex-1 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2.5 text-sm focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20"
-              />
-              <button
-                onClick={addPoint}
-                disabled={!newPoint.trim()}
-                className="inline-flex items-center gap-1 rounded-xl bg-[var(--color-primary)]/10 px-4 py-2.5 text-sm font-medium text-[var(--color-primary)] transition-colors hover:bg-[var(--color-primary)]/20 disabled:opacity-50"
-              >
-                <Plus className="h-4 w-4" />
-                添加
+              <input type="text" value={newPoint} onChange={(e) => setNewPoint(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addPoint()} placeholder="输入新的卖点..." className="flex-1 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2.5 text-sm focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20" />
+              <button onClick={addPoint} disabled={!newPoint.trim()} className="inline-flex items-center gap-1 rounded-xl bg-[var(--color-primary)]/10 px-4 py-2.5 text-sm font-medium text-[var(--color-primary)] transition-colors hover:bg-[var(--color-primary)]/20 disabled:opacity-50">
+                <Plus className="h-4 w-4" />添加
               </button>
             </div>
           </div>
         </>
       )}
 
-      {/* Navigation */}
       <div className="flex justify-between">
-        <button
-          onClick={onPrev}
-          className="inline-flex items-center gap-2 rounded-xl border border-[var(--color-border)] px-6 py-3 text-sm font-medium transition-colors hover:bg-gray-50"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          上一步
+        <button onClick={onPrev} className="inline-flex items-center gap-2 rounded-xl border border-[var(--color-border)] px-6 py-3 text-sm font-medium transition-colors hover:bg-gray-50">
+          <ArrowLeft className="h-4 w-4" />上一步
         </button>
-        <button
-          onClick={onNext}
-          disabled={!canProceed}
-          className={cn(
-            "inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold transition-all",
-            canProceed
-              ? "bg-[var(--color-primary)] text-white shadow-lg hover:bg-[var(--color-primary-dark)]"
-              : "cursor-not-allowed bg-gray-200 text-gray-400"
-          )}
-        >
-          下一步：参数设置
-          <ArrowRight className="h-4 w-4" />
+        <button onClick={onNext} disabled={!canProceed} className={cn("inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold transition-all", canProceed ? "bg-[var(--color-primary)] text-white shadow-lg hover:bg-[var(--color-primary-dark)]" : "cursor-not-allowed bg-gray-200 text-gray-400")}>
+          下一步：参数设置<ArrowRight className="h-4 w-4" />
         </button>
       </div>
     </div>

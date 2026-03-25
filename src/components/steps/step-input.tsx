@@ -2,11 +2,12 @@
 
 import { useState, useRef } from "react";
 import type { GenerateState } from "@/app/generate/page";
-import { CATEGORY_TEMPLATES } from "@/lib/script-templates";
-import { visionChat } from "@/lib/ai-client";
+import { CATEGORY_TEMPLATES, REQUIRED_FIELDS_COMMON } from "@/lib/script-templates";
+import { chatCompletion, visionChat } from "@/lib/ai-client";
 import {
   GraduationCap, Sparkles, UtensilsCrossed, Smartphone, Home, PenTool,
-  ArrowRight, MessageSquare, Upload, X, FileText, Image as ImageIcon, Loader2, Eye,
+  ArrowRight, MessageSquare, Upload, X, FileText, Image as ImageIcon,
+  Loader2, Eye, AlertTriangle, CheckCircle2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -23,6 +24,12 @@ type UploadedFile = {
   analysisResult?: string;
 };
 
+type MissingField = {
+  field: string;
+  reason: string;
+  suggestion: string;
+};
+
 type Props = {
   state: GenerateState;
   updateState: (u: Partial<GenerateState>) => void;
@@ -33,6 +40,9 @@ export function StepInput({ state, updateState, onNext }: Props) {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [checking, setChecking] = useState(false);
+  const [showCheckDialog, setShowCheckDialog] = useState(false);
+  const [missingFields, setMissingFields] = useState<MissingField[]>([]);
 
   const handleCategorySelect = (catId: string) => {
     setSelectedCategory(catId);
@@ -42,23 +52,74 @@ export function StepInput({ state, updateState, onNext }: Props) {
     }
   };
 
+  const currentCategory = CATEGORY_TEMPLATES.find((c) => c.id === selectedCategory);
+  const requiredFields = currentCategory?.requiredFields || REQUIRED_FIELDS_COMMON;
+
   const currentPlaceholder = (() => {
     if (selectedCategory) {
       const cat = CATEGORY_TEMPLATES.find((c) => c.id === selectedCategory);
       if (cat?.placeholder) return cat.placeholder;
     }
-    return `请描述你要售卖的产品，建议包含以下信息：
+    return `请描述你要售卖的产品，以下信息必须提供：
 
-产品名称：
-目标人群：
-售价：
-核心卖点：（3-5个）
-品牌优势：
-竞品对比：
-促销策略：
+★ 产品名称：
+★ 售价：
+★ 目标人群：
+★ 核心卖点：（3-5个）
+★ 品牌背书：
+★ 促销策略/福利：（直播间优惠、赠品、满减等）
 
-描述越详细，生成的话术越精准。你也可以直接用自然语言描述。`;
+选填：竞品对比、售后保障、直播间玩法（福袋/秒杀/抽奖等）`;
   })();
+
+  const checkInfoCompleteness = async () => {
+    setChecking(true);
+    setShowCheckDialog(false);
+    setMissingFields([]);
+
+    const fieldsList = requiredFields.map((f) => `- ${f.label}（${f.hint}）`).join("\n");
+
+    try {
+      const result = await chatCompletion({
+        model: "deepseek-v3",
+        node: "domestic",
+        system: `你是一位直播话术质量检查专家。用户提供了一段产品信息，你需要检查这些信息是否足够生成一段高质量的直播话术。
+
+以下是生成好话术必须具备的关键信息：
+${fieldsList}
+
+请检查用户提供的信息，找出缺失或不够具体的部分。
+
+规则：
+1. 如果某个字段完全没有提到，标记为缺失
+2. 如果某个字段提到了但太模糊（如只写了"好"而没有具体内容），也标记为需要补充
+3. 特别注意：售价/价格、促销策略/福利/赠品、直播间玩法 这三项对话术质量影响很大，如果缺失必须提醒
+4. 如果所有关键信息都已提供且足够具体，返回空数组
+
+请直接返回JSON数组，不要输出思考过程，不要包含markdown代码块标记：
+[
+  {"field": "缺失字段名", "reason": "为什么需要这个信息", "suggestion": "建议用户怎么补充"}
+]
+如果信息完整，返回：[]`,
+        prompt: state.productInfo,
+      });
+
+      const cleaned = result.replace(/```json\n?/g, "").replace(/```\n?/g, "").replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+      const parsed: MissingField[] = JSON.parse(cleaned);
+
+      if (parsed.length === 0) {
+        onNext();
+      } else {
+        setMissingFields(parsed);
+        setShowCheckDialog(true);
+      }
+    } catch (err) {
+      console.error("Info check failed:", err);
+      onNext();
+    } finally {
+      setChecking(false);
+    }
+  };
 
   const analyzeImage = async (imageBase64: string, fileName: string, mimeType: string, fileIdx: number) => {
     setUploadedFiles((prev) =>
@@ -155,7 +216,7 @@ export function StepInput({ state, updateState, onNext }: Props) {
       <div>
         <h2 className="text-2xl font-bold">Step 1: 输入产品信息</h2>
         <p className="mt-1 text-[var(--color-text-secondary)]">
-          告诉我你要售卖的产品，包括产品名称、目标人群、价格、核心卖点等信息
+          告诉我你要售卖的产品，带 ★ 的信息是生成高质量话术必须提供的
         </p>
       </div>
 
@@ -184,6 +245,22 @@ export function StepInput({ state, updateState, onNext }: Props) {
         </div>
       </div>
 
+      {/* Required fields checklist */}
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+        <p className="mb-2 text-sm font-medium text-amber-800">
+          <AlertTriangle className="mr-1 inline h-4 w-4" />
+          生成高质量话术必须提供的信息：
+        </p>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3">
+          {requiredFields.map((f) => (
+            <div key={f.key} className="flex items-center gap-1.5 text-xs text-amber-700">
+              <span className="text-amber-500">★</span>
+              <span>{f.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Product info textarea */}
       <div>
         <label className="mb-2 block text-sm font-medium">
@@ -194,11 +271,11 @@ export function StepInput({ state, updateState, onNext }: Props) {
           value={state.productInfo}
           onChange={(e) => updateState({ productInfo: e.target.value })}
           placeholder={currentPlaceholder}
-          rows={12}
+          rows={14}
           className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 text-sm leading-relaxed placeholder:text-[var(--color-text-secondary)]/50 focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20"
         />
         <div className="mt-2 flex items-center justify-between text-xs text-[var(--color-text-secondary)]">
-          <span>描述越详细，生成的话术越精准</span>
+          <span>信息越完整，话术质量越高。AI 会在下一步前检查信息完整性。</span>
           <span>{state.productInfo.length} 字</span>
         </div>
       </div>
@@ -230,66 +307,44 @@ export function StepInput({ state, updateState, onNext }: Props) {
           className="hidden"
         />
 
-        {/* Uploaded files list */}
         {uploadedFiles.length > 0 && (
           <div className="mt-3 space-y-3">
             {uploadedFiles.map((file, idx) => (
-              <div
-                key={idx}
-                className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]"
-              >
+              <div key={idx} className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
                 <div className="flex items-center gap-3 p-3">
                   {file.preview ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={file.preview}
-                      alt={file.name}
-                      className="h-12 w-12 rounded-lg object-cover"
-                    />
+                    <img src={file.preview} alt={file.name} className="h-12 w-12 rounded-lg object-cover" />
                   ) : (
                     <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gray-100">
-                      {file.type === "image" ? (
-                        <ImageIcon className="h-5 w-5 text-gray-400" />
-                      ) : (
-                        <FileText className="h-5 w-5 text-gray-400" />
-                      )}
+                      {file.type === "image" ? <ImageIcon className="h-5 w-5 text-gray-400" /> : <FileText className="h-5 w-5 text-gray-400" />}
                     </div>
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="truncate text-sm font-medium">{file.name}</p>
                     {file.analyzing && (
                       <p className="flex items-center gap-1.5 text-xs text-[var(--color-primary)]">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        AI 正在识别图片内容...
+                        <Loader2 className="h-3 w-3 animate-spin" />AI 正在识别图片内容...
                       </p>
                     )}
                     {file.analysisResult && !file.analyzing && (
                       <p className="flex items-center gap-1 text-xs text-green-600">
-                        <Eye className="h-3 w-3" />
-                        AI 识别完成，结果已填入上方输入框
+                        <Eye className="h-3 w-3" />AI 识别完成，结果已填入上方输入框
                       </p>
                     )}
                     {file.type === "text" && (
-                      <p className="text-xs text-[var(--color-text-secondary)]">
-                        文件内容已读取并填入上方输入框
-                      </p>
+                      <p className="text-xs text-[var(--color-text-secondary)]">文件内容已读取并填入上方输入框</p>
                     )}
                   </div>
-                  <button
-                    onClick={() => removeFile(idx)}
-                    className="shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500"
-                  >
+                  <button onClick={() => removeFile(idx)} className="shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500">
                     <X className="h-4 w-4" />
                   </button>
                 </div>
-
-                {/* AI analysis result preview */}
                 {file.analysisResult && !file.analyzing && (
                   <div className="border-t border-[var(--color-border)] bg-green-50 px-3 py-2.5">
                     <p className="mb-1 text-xs font-medium text-green-700">AI 识别结果：</p>
                     <p className="whitespace-pre-wrap text-xs leading-relaxed text-green-800">
-                      {file.analysisResult.slice(0, 300)}
-                      {file.analysisResult.length > 300 && "..."}
+                      {file.analysisResult.slice(0, 300)}{file.analysisResult.length > 300 && "..."}
                     </p>
                   </div>
                 )}
@@ -299,20 +354,76 @@ export function StepInput({ state, updateState, onNext }: Props) {
         )}
       </div>
 
+      {/* Info check dialog */}
+      {showCheckDialog && missingFields.length > 0 && (
+        <div className="animate-fade-in rounded-2xl border-2 border-amber-300 bg-amber-50 p-5">
+          <div className="mb-4 flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-amber-500" />
+            <h3 className="text-base font-semibold text-amber-800">
+              AI 检测到以下关键信息缺失
+            </h3>
+          </div>
+          <p className="mb-4 text-sm text-amber-700">
+            补充这些信息可以显著提升话术质量，建议完善后再生成：
+          </p>
+          <div className="space-y-3">
+            {missingFields.map((item, idx) => (
+              <div key={idx} className="rounded-xl border border-amber-200 bg-white p-3">
+                <div className="flex items-start gap-2">
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs font-bold text-amber-600">
+                    {idx + 1}
+                  </span>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-amber-800">{item.field}</p>
+                    <p className="mt-0.5 text-xs text-amber-600">{item.reason}</p>
+                    <p className="mt-1 text-xs text-[var(--color-primary)]">
+                      建议：{item.suggestion}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 flex gap-3">
+            <button
+              onClick={() => setShowCheckDialog(false)}
+              className="flex-1 rounded-xl bg-[var(--color-primary)] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-primary-dark)]"
+            >
+              我去补充信息
+            </button>
+            <button
+              onClick={() => { setShowCheckDialog(false); onNext(); }}
+              className="rounded-xl border border-[var(--color-border)] px-4 py-2.5 text-sm font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-gray-50"
+            >
+              跳过，直接生成
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Next button */}
       <div className="flex justify-end">
         <button
-          onClick={onNext}
-          disabled={!canProceed}
+          onClick={checkInfoCompleteness}
+          disabled={!canProceed || checking}
           className={cn(
             "inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold transition-all",
-            canProceed
+            canProceed && !checking
               ? "bg-[var(--color-primary)] text-white shadow-lg hover:bg-[var(--color-primary-dark)]"
               : "cursor-not-allowed bg-gray-200 text-gray-400"
           )}
         >
-          下一步：AI 分析卖点
-          <ArrowRight className="h-4 w-4" />
+          {checking ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              AI 正在检查信息完整性...
+            </>
+          ) : (
+            <>
+              下一步：AI 分析卖点
+              <ArrowRight className="h-4 w-4" />
+            </>
+          )}
         </button>
       </div>
     </div>

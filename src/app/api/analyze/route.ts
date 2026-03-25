@@ -1,13 +1,18 @@
 import { streamText } from "ai";
-import { openai } from "@ai-sdk/openai";
+import { createOpenAI } from "@ai-sdk/openai";
 
 export const maxDuration = 60;
+
+const domestic = createOpenAI({
+  apiKey: process.env.DOMESTIC_API_KEY,
+  baseURL: process.env.DOMESTIC_BASE_URL,
+});
 
 export async function POST(req: Request) {
   const { productInfo } = await req.json();
 
   const result = streamText({
-    model: openai("gpt-4o"),
+    model: domestic("deepseek-v3"),
     system: `你是一位资深直播带货运营专家，同时具备丰富的市场调研能力。用户会给你一段产品信息描述，你需要：
 
 1. **背景分析**：基于你的知识，分析这个产品所在行业的市场情况、竞品格局、目标用户特征

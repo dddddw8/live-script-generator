@@ -1,9 +1,19 @@
 import { NextResponse } from "next/server";
 import { generateText } from "ai";
-import { openai } from "@ai-sdk/openai";
+import { createOpenAI } from "@ai-sdk/openai";
 import { SCRIPT_STRUCTURE, STYLE_OPTIONS } from "@/lib/script-templates";
 
 export const maxDuration = 120;
+
+const oversea = createOpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+  baseURL: process.env.OPENAI_BASE_URL,
+});
+
+const domestic = createOpenAI({
+  apiKey: process.env.DOMESTIC_API_KEY,
+  baseURL: process.env.DOMESTIC_BASE_URL,
+});
 
 export async function POST(req: Request) {
   const { productInfo, sellingPoints, style, wordCount, loopMinutes } = await req.json();
@@ -53,15 +63,16 @@ ${sellingPoints.map((p: string, i: number) => `${i + 1}. ${p}`).join("\n")}
 请按照话术结构要求，生成约 ${wordCount} 字的完整直播话术。`;
 
   const models = [
-    { id: "gpt-4o", name: "GPT-4o" },
-    { id: "gpt-4o-mini", name: "GPT-4o Mini" },
+    { provider: oversea, id: "sonnet-4.6", name: "Claude 4.6 Sonnet" },
+    { provider: domestic, id: "deepseek-v3", name: "DeepSeek V3" },
+    { provider: domestic, id: "qwen3-235b-a22b", name: "Qwen3 235B" },
   ];
 
   try {
     const results = await Promise.allSettled(
       models.map(async (m) => {
         const result = await generateText({
-          model: openai(m.id),
+          model: m.provider(m.id),
           system: systemPrompt,
           prompt: userPrompt,
         });

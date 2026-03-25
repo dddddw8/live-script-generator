@@ -1,8 +1,13 @@
 import { streamText } from "ai";
-import { openai } from "@ai-sdk/openai";
+import { createOpenAI } from "@ai-sdk/openai";
 import { SCRIPT_STRUCTURE, STYLE_OPTIONS } from "@/lib/script-templates";
 
 export const maxDuration = 60;
+
+const oversea = createOpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+  baseURL: process.env.OPENAI_BASE_URL,
+});
 
 export async function POST(req: Request) {
   const { productInfo, sellingPoints, style, wordCount, loopMinutes } = await req.json();
@@ -85,7 +90,7 @@ ${sellingPoints.map((p: string, i: number) => `${i + 1}. ${p}`).join("\n")}
 请按照话术结构要求，运用 AIDA 模型和 FABE 原则，生成约 ${wordCount} 字的完整直播话术。每个部分用 ### 标题分隔。`;
 
   const result = streamText({
-    model: openai("gpt-4o"),
+    model: oversea("sonnet-4.6"),
     system: systemPrompt,
     prompt: userPrompt,
   });

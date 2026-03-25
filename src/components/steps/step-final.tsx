@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { GenerateState } from "@/app/generate/page";
 import { saveScript } from "@/lib/storage";
-import { ArrowLeft, Copy, Check, Save, Download, FileText, FileType, FileCode } from "lucide-react";
+import { ArrowLeft, Copy, Check, Save, Download, FileText, FileType, FileCode, Printer } from "lucide-react";
 
 type Props = {
   state: GenerateState;
@@ -100,6 +100,27 @@ ${bodyHtml}
     downloadBlob(blob, `${fileName}_${dateStr}.html`);
   };
 
+  const downloadPdf = () => {
+    const sections = finalText.split(/###\s*/g).filter(Boolean);
+    const bodyHtml = sections.map((s) => {
+      const lines = s.trim().split("\n");
+      const title = lines[0];
+      const content = lines.slice(1).join("\n").trim();
+      return `<h2 style="color:#4f46e5;border-bottom:2px solid #e2e8f0;padding-bottom:8px;margin-top:24px;font-size:16px;">${title}</h2>\n<div style="line-height:2;white-space:pre-wrap;font-size:14px;">${content}</div>`;
+    }).join("\n");
+
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${state.productName || "直播话术"}</title>
+<style>@media print{@page{margin:20mm;}body{margin:0;}}body{font-family:-apple-system,"Microsoft YaHei",sans-serif;max-width:700px;margin:0 auto;padding:20px;color:#1e293b;}h1{text-align:center;color:#4f46e5;font-size:22px;}.meta{text-align:center;color:#64748b;font-size:12px;margin-bottom:20px;}</style></head>
+<body><h1>${state.productName || "直播话术"}</h1><p class="meta">生成时间：${dateStr} | 有效字数：${countChineseChars(finalText)} | 闭环时间：${state.loopMinutes}分钟</p>${bodyHtml}</body></html>`;
+
+    const printWindow = window.open("", "_blank");
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+      setTimeout(() => { printWindow.print(); }, 500);
+    }
+  };
+
   const downloadDocx = () => {
     const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
 <head><meta charset="UTF-8"><title>${state.productName}</title>
@@ -187,10 +208,15 @@ ${bodyHtml}
           <Download className="mr-1.5 inline h-4 w-4 text-[var(--color-primary)]" />
           下载话术
         </p>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <button onClick={downloadPdf} className="flex flex-col items-center gap-2 rounded-xl border-2 border-red-200 bg-red-50 p-4 transition-all hover:border-red-400 hover:shadow-md active:scale-95">
+            <Printer className="h-6 w-6 text-red-600" />
+            <span className="text-sm font-semibold text-red-700">PDF</span>
+            <span className="text-[10px] text-red-500">打印/另存为PDF</span>
+          </button>
           <button onClick={downloadDocx} className="flex flex-col items-center gap-2 rounded-xl border-2 border-blue-200 bg-blue-50 p-4 transition-all hover:border-blue-400 hover:shadow-md active:scale-95">
             <FileType className="h-6 w-6 text-blue-600" />
-            <span className="text-sm font-semibold text-blue-700">Word 文档</span>
+            <span className="text-sm font-semibold text-blue-700">Word</span>
             <span className="text-[10px] text-blue-500">.doc 格式</span>
           </button>
           <button onClick={downloadHtml} className="flex flex-col items-center gap-2 rounded-xl border-2 border-purple-200 bg-purple-50 p-4 transition-all hover:border-purple-400 hover:shadow-md active:scale-95">

@@ -4,6 +4,19 @@ import { useState, useRef } from "react";
 import type { GenerateState } from "@/app/generate/page";
 import { CATEGORY_TEMPLATES, REQUIRED_FIELDS_COMMON } from "@/lib/script-templates";
 import { chatCompletion, visionChat } from "@/lib/ai-client";
+
+const STRUCTURED_FORMAT_PROMPT = `请严格按照以下格式输出（每行一个字段，冒号后直接写内容）：
+产品名称：（产品的完整名称）
+售价：（直播间售价）
+目标人群：（面向的用户群体）
+核心卖点：（3-5个，用顿号分隔）
+品牌背书：（品牌实力、认证、口碑）
+促销策略：（直播间优惠、赠品、满减等福利）
+竞品对比：（与同类产品的差异化优势）
+使用场景：（产品的典型使用场景）
+
+注意：如果某些信息无法从图片/文件中确定，用"待补充"标记，但尽量根据已有信息合理推测。请直接输出结果，不要输出思考过程。`;
+
 import {
   GraduationCap, Sparkles, UtensilsCrossed, Smartphone, Home, PenTool,
   ArrowRight, MessageSquare, Upload, X, FileText, Image as ImageIcon,
@@ -135,15 +148,9 @@ suggestions 要根据用户已有的产品信息来推测，给出合理具体�
       const analysis = await visionChat({
         imageBase64,
         mimeType,
-        prompt: `你是一位资深直播带货运营专家。请仔细分析这张产品图片，提取以下信息。请直接输出分析结果，不要输出思考过程。
+        prompt: `你是一位资深直播带货运营专家。请仔细分析这张产品图片，识别产品信息并按照直播话术所需的格式整理输出。
 
-请用简洁的中文描述，格式如下：
-产品识别：xxx
-外观特征：xxx
-功能卖点：xxx
-包装内容：xxx（如果能看到的话）
-目标人群：xxx
-使用场景：xxx`,
+${STRUCTURED_FORMAT_PROMPT}`,
       });
 
       setUploadedFiles((prev) =>
@@ -151,11 +158,7 @@ suggestions 要根据用户已有的产品信息来推测，给出合理具体�
           i === fileIdx ? { ...f, analyzing: false, analysisResult: analysis } : f
         )
       );
-      updateState({
-        productInfo:
-          state.productInfo +
-          `\n\n--- AI 从图片「${fileName}」识别到的信息 ---\n${analysis}`,
-      });
+      updateState({ productInfo: analysis });
     } catch {
       setUploadedFiles((prev) =>
         prev.map((f, i) =>
@@ -197,12 +200,32 @@ suggestions 要根据用户已有的产品信息来推测，给出合理具体�
       } else {
         const text = await file.text();
         const truncated = text.slice(0, 3000);
+        const newIdx = uploadedFiles.length;
+
         setUploadedFiles((prev) => [
           ...prev,
-          { name: file.name, type: "text", content: truncated },
+          { name: file.name, type: "text", content: truncated, analyzing: true },
         ]);
-        updateState({
-          productInfo: state.productInfo + `\n\n--- 来自文件「${file.name}」 ---\n${truncated}`,
+
+        chatCompletion({
+          model: "deepseek-v3",
+          node: "domestic",
+          system: `你是一位资深直播带货运营专家。用户上传了一个文件，请从中提取产品相关信息，并按照直播话术所需的格式整理输出。
+
+${STRUCTURED_FORMAT_PROMPT}`,
+          prompt: `以下是文件「${file.name}」的内容：\n\n${truncated}`,
+        }).then((analysis) => {
+          setUploadedFiles((prev) =>
+            prev.map((f, i) => (i === newIdx ? { ...f, analyzing: false, analysisResult: analysis } : f))
+          );
+          updateState({ productInfo: analysis });
+        }).catch(() => {
+          setUploadedFiles((prev) =>
+            prev.map((f, i) => (i === newIdx ? { ...f, analyzing: false, analysisResult: "识别失败，请手动补充" } : f))
+          );
+          updateState({
+            productInfo: state.productInfo + `\n\n--- 来自文件「${file.name}」 ---\n${truncated}`,
+          });
         });
       }
     }

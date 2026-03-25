@@ -51,12 +51,12 @@ ${sectionsGuide}
 ${styleOption?.name || "知识科普型"}：${styleOption?.prompt_extra || ""}
 
 ## 【极其重要】字数硬性要求
-- 这里说的字数是指有效汉字数量（不含标点符号、空格、换行）
-- 有效汉字总数必须严格控制在 ${state.wordCount} 字左右（允许上下浮动10%，即 ${Math.round(state.wordCount * 0.9)}-${Math.round(state.wordCount * 1.1)} 字之间）
-- 对应 ${state.loopMinutes} 分钟的话术闭环（按每分钟约200字的语速计算）
-- 每个章节平均约 ${perSectionWords} 个有效汉字，根据重要程度可适当调整
-- 绝对不能超过 ${Math.round(state.wordCount * 1.15)} 个有效汉字！如果内容太多，请精简表达，突出重点
-- 内容要充实饱满，不要为了凑字数而水，也不要为了控制字数而过于精简导致话术缺乏感染力
+- 总字数（含标点）必须达到 ${Math.round(state.wordCount * 1.3)} 字左右，这样去掉标点后的有效汉字约为 ${state.wordCount} 字
+- 宁可多写一点也不要少写！字数不够会导致话术内容单薄、说服力不足
+- 对应 ${state.loopMinutes} 分钟的话术闭环（按每分钟约250字的总字数计算）
+- 6个章节合理分配字数，重点章节（主卖点展示、促单）可以多写
+- 每个章节至少 ${Math.round(perSectionWords * 1.2)} 字（含标点），不要出现只有两三句话的章节
+- 内容要充实饱满，每个卖点要展开讲，有数据、有场景、有对比，不要一笔带过
 
 ## 其他规则
 口语化、有感染力、加互动引导、运用FABE原则、不用违禁词、自然过渡。`;
@@ -68,7 +68,7 @@ ${styleOption?.name || "知识科普型"}：${styleOption?.prompt_extra || ""}
 核心卖点：
 ${state.sellingPoints.map((p, i) => `${i + 1}. ${p}`).join("\n")}
 
-【再次强调】请严格控制有效汉字总数在 ${state.wordCount} 字左右（${Math.round(state.wordCount * 0.9)}-${Math.round(state.wordCount * 1.1)}字），对应 ${state.loopMinutes} 分钟话术闭环。每个部分用 ### 标题分隔。`;
+【再次强调】总字数（含标点）必须达到 ${Math.round(state.wordCount * 1.3)} 字左右，确保去掉标点后有效汉字不少于 ${state.wordCount} 字。宁多勿少！每个章节要充实展开，不要草草几句带过。每个部分用 ### 标题分隔。`;
 
   return { system, prompt };
 }

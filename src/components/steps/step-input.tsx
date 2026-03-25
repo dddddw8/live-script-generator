@@ -59,7 +59,7 @@ export function StepInput({ state, updateState, onNext }: Props) {
 描述越详细，生成的话术越精准。你也可以直接用自然语言描述。`;
   })();
 
-  const analyzeImage = async (imageBase64: string, fileName: string, fileIdx: number) => {
+  const analyzeImage = async (imageBase64: string, fileName: string, mimeType: string, fileIdx: number) => {
     setUploadedFiles((prev) =>
       prev.map((f, i) => (i === fileIdx ? { ...f, analyzing: true } : f))
     );
@@ -68,7 +68,7 @@ export function StepInput({ state, updateState, onNext }: Props) {
       const res = await fetch("/api/analyze-image", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageBase64, fileName }),
+        body: JSON.stringify({ imageBase64, fileName, mimeType }),
       });
       const data = await res.json();
 
@@ -110,6 +110,7 @@ export function StepInput({ state, updateState, onNext }: Props) {
     for (const file of Array.from(files)) {
       if (file.type.startsWith("image/")) {
         const reader = new FileReader();
+        const fileMimeType = file.type || "image/jpeg";
         reader.onload = (ev) => {
           const dataUrl = ev.target?.result as string;
           const base64 = dataUrl.split(",")[1];
@@ -126,7 +127,7 @@ export function StepInput({ state, updateState, onNext }: Props) {
             },
           ]);
 
-          analyzeImage(base64, file.name, newIdx);
+          analyzeImage(base64, file.name, fileMimeType, newIdx);
         };
         reader.readAsDataURL(file);
       } else {

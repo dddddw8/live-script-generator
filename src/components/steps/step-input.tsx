@@ -7,7 +7,7 @@ import { chatCompletion, visionChat } from "@/lib/ai-client";
 import {
   GraduationCap, Sparkles, UtensilsCrossed, Smartphone, Home, PenTool,
   ArrowRight, MessageSquare, Upload, X, FileText, Image as ImageIcon,
-  Loader2, Eye, AlertTriangle, CheckCircle2,
+  Loader2, Eye, CheckCircle2, Lightbulb,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -27,7 +27,7 @@ type UploadedFile = {
 type MissingField = {
   field: string;
   question: string;
-  example: string;
+  suggestions: string[];
 };
 
 type Props = {
@@ -98,12 +98,13 @@ ${fieldsList}
 3. 特别注意：售价/价格、促销策略/福利/赠品 这两项对话术质量影响极大，如果缺失必须提醒
 4. 如果所有关键信息都已提供且足够具体，返回空数组
 5. 对每个缺失字段，用口语化的方式向用户提问，像朋友聊天一样自然
+6. 对每个缺失字段，根据用户已提供的产品信息，给出 2-4 个具体的填写建议（用户点击即可自动填入）
 
 请直接返回JSON数组，不要输出思考过程，不要包含markdown代码块标记：
 [
-  {"field": "缺失字段名", "question": "用口语化的方式向用户提问（如：这款产品直播间卖多少钱呀？有没有什么优惠活动或赠品？）", "example": "给一个填写示例（如：299元、买一送一加赠收纳包）"}
+  {"field": "缺失字段名", "question": "口语化提问", "suggestions": ["建议1（要具体，如：299元/套，含主机+配件+收纳包）", "建议2", "建议3"]}
 ]
-如果信息完整，返回：[]`,
+suggestions 要根据用户已有的产品信息来推测，给出合理具体的建议。如果信息完整，返回：[]`,
         prompt: state.productInfo,
       });
 
@@ -249,19 +250,18 @@ ${fieldsList}
         </div>
       </div>
 
-      {/* Required fields checklist */}
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-        <p className="mb-2 text-sm font-medium text-amber-800">
-          <AlertTriangle className="mr-1 inline h-4 w-4" />
-          生成高质量话术必须提供的信息：
-        </p>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3">
-          {requiredFields.map((f) => (
-            <div key={f.key} className="flex items-center gap-1.5 text-xs text-amber-700">
-              <span className="text-amber-500">★</span>
-              <span>{f.label}</span>
-            </div>
-          ))}
+      {/* Required fields hint */}
+      <div className="flex items-start gap-3 rounded-xl bg-indigo-50 p-4 text-sm">
+        <Lightbulb className="mt-0.5 h-5 w-5 shrink-0 text-indigo-500" />
+        <div>
+          <p className="font-medium text-indigo-800">AI 提示：以下信息有助于生成高质量话术</p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {requiredFields.map((f) => (
+              <span key={f.key} className="inline-flex items-center rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-700">
+                {f.label}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -392,13 +392,30 @@ ${fieldsList}
                     <textarea
                       value={answers[idx] || ""}
                       onChange={(e) => setAnswers((prev) => ({ ...prev, [idx]: e.target.value }))}
-                      placeholder={`例如：${item.example}`}
+                      placeholder="在此输入，或点击下方建议快速填写"
                       rows={2}
                       className="w-full rounded-lg border border-[var(--color-border)] bg-white p-3 text-sm leading-relaxed placeholder:text-[var(--color-text-secondary)]/50 focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20"
                     />
+
+                    {/* Clickable AI suggestions */}
+                    {item.suggestions && item.suggestions.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        <span className="text-xs text-[var(--color-text-secondary)]">AI 建议：</span>
+                        {item.suggestions.map((sug, sIdx) => (
+                          <button
+                            key={sIdx}
+                            onClick={() => setAnswers((prev) => ({ ...prev, [idx]: sug }))}
+                            className="rounded-full border border-[var(--color-primary)]/30 bg-[var(--color-primary)]/5 px-2.5 py-1 text-xs text-[var(--color-primary)] transition-all hover:bg-[var(--color-primary)]/15 hover:border-[var(--color-primary)]/50 active:scale-95"
+                          >
+                            {sug}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
                     <button
                       onClick={() => questionFileRefs.current[idx]?.click()}
-                      className="mt-1.5 inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs text-[var(--color-text-secondary)] transition-colors hover:bg-gray-100"
+                      className="mt-2 inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs text-[var(--color-text-secondary)] transition-colors hover:bg-gray-100"
                     >
                       <Upload className="h-3 w-3" />
                       上传图片/文件补充
